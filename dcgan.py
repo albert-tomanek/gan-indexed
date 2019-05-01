@@ -152,6 +152,7 @@ class DCGAN():
             # If at save interval => save generated image samples
             if epoch % save_interval == 0:
                 self.save_imgs(epoch)
+                self.save_imgs_intensities(epoch)
 
     def save_imgs(self, epoch):
         r, c = 5, 5
@@ -173,14 +174,49 @@ class DCGAN():
         fig.savefig("images/fashion_mnist_%d.png" % epoch)
         plt.close()
 
-    def save_weights(self, g, d):
+    def save_imgs_intensities(self, epoch):
+        r, c = 8, self.num_colors + 1
+        noise = np.random.normal(0, 1, (r * c, self.latent_dim))
+        gen_imgs = self.generator.predict(noise)
+
+        chnl_intensities = gen_imgs.transpose((0, 3, 1, 2))     # (32, 28, 28, 3) -> (32, 3, 28, 28)    Splits into three separate heatmaps.
+
+        # Rescale images 0 - 1
+        gen_imgs = idx_to_rgb(onehot_to_indexed(gen_imgs),
+            np.array([[0, 0, 0], [.5, .5, .5], [1, 1, 1]])  # Grayscale palette
+        )
+
+        fig, axs = plt.subplots(r, c)
+        cnt = 0
+        for i in range(r):
+            axs[i,0].imshow(gen_imgs[cnt, :,:,0], cmap='gray')
+            axs[i,0].axis('off')
+
+            for chnl in range(self.num_colors):
+                axs[i,chnl+1].imshow(chnl_intensities[cnt, chnl], cmap='gist_heat')
+                axs[i,chnl+1].axis('off')
+
+            cnt += 1
+        fig.savefig("images/fashion_mnist_inten_%d.png" % epoch)
+        plt.close()
+
+    def save_weights(self, g='generator.h5', d='discriminator.h5'):
         self.generator.save_weights(g)
         self.discriminator.save_weights(d)
+
+    def load_weights(self, g='generator.h5', d='discriminator.h5'):
+        self.generator.load_weights(g)
+        self.discriminator.load_weights(d)
+
+import os
 
 if __name__ == '__main__':
     dcgan = DCGAN()
 
+    if os.path.exists('generator.h5'):
+        dcgan.load_weights()
+
     try:
         dcgan.train(epochs=4000, batch_size=32, save_interval=50)
     finally:
-        dcgan.save_weights(g='generator.h5', d='discriminator.h5')
+        dcgan.save_weights()
